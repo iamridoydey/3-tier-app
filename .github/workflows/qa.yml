@@ -7,9 +7,7 @@ on:
       - client/**
       - server/**
       - .github/workflows/qa.yml
-    paths-ignore:
-      - .gitignore
-      - **.md
+      
 jobs:
   gitleaks-scan:
     name: Gitleaks scan
