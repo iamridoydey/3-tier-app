@@ -1,0 +1,38 @@
+name: QA Pipeline
+on:
+  push:
+    branches: 
+      - qa
+    paths:
+      - client/**
+      - server/**
+      - .github/workflows/qa.yml
+    paths-ignore:
+      - .gitignore
+      - **.md
+jobs:
+  gitleaks-scan:
+    name: Gitleaks scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+      - name: Run gitleaks scan
+        run: |
+          docker run --rm \
+          -v "${{ github.workspace }}:/repo" \
+          zricethezav/gitleaks:latest detect \
+          --source=/repo \
+          --report-format=json \
+          --report-path=/repo/gitleaks-report.json \
+          --redact \
+          --exit-code 0
+          
+      - name: Upload gitleaks artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: gitleaks-report
+          path: ${{ github.workspace }}/gitleaks-report.json
+          if-no-files-found: warn 
+          
+        
