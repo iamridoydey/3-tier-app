@@ -314,9 +314,27 @@ jobs:
       # The possible outputs of the `quality-gate-status` variable are `PASSED`, `WARN` or `FAILED`.
       - name: "Example show SonarQube Quality Gate Status value"
         run: echo "The Quality Gate status is ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
-    
 
-  
-  
-          
-        
+  # Might have the question after that we will build the image. Then why do we need to build here. Ans: Just make sure
+  # that no security and vulnerability left for docker build. (shift left security)
+  client-build:
+    name: Client webpack build
+    runs-on: ubuntu-latest
+    needs: client-test
+    defaults:
+        run:
+          working-directory: client
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+      - name: Setup nodejs
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      - name: Install client dependency
+        run: npm ci
+      - name: Build client
+        run: npm run build --if-present
+        continue-on-error: true
