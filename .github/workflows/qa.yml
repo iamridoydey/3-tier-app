@@ -284,6 +284,9 @@ jobs:
   sonarqube:
     name: Sonarqube Analysis and Quality gate
     runs-on: ubuntu-latest
+    needs: 
+      - server-test
+      - client-test
     steps:
       - uses: actions/checkout@v4
         with:
