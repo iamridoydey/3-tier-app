@@ -3,7 +3,7 @@
 #=====================================================
 FROM node:lts-alpine3.24 AS client-builder
 WORKDIR /app/client
-COPY package*.json ./
+COPY client/package*.json ./
 RUN npm ci
 COPY ./client ./
 RUN npm run build
@@ -13,7 +13,7 @@ RUN npm run build
 #=====================================================
 FROM node:lts-alpine3.24 AS server-runner
 WORKDIR /app/server
-COPY package*.json/ ./
+COPY server/package*.json/ ./
 RUN npm ci --omit=dev
 COPY ./server ./
 
