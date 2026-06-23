@@ -376,7 +376,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'image'
-          image-ref: "iamridoydey/3-tier-app:${{ github.sha }}"
+          image-ref: iamridoydey/3-tier-app:${{ github.sha }}
           ignore-unfixed: true
           format: 'json'
           output: 'trivy-docker-image-results.json'
@@ -386,7 +386,7 @@ jobs:
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: 'image'
-          image-ref: "iamridoydey/3-tier-app:${{ github.sha }}"
+          image-ref: iamridoydey/3-tier-app:${{ github.sha }}
           ignore-unfixed: true
           format: 'table'
           output: 'trivy-docker-image-results.txt'
@@ -400,6 +400,15 @@ jobs:
             trivy-docker-image-results.json
             trivy-docker-image-results.txt
           if-no-files-found: warn
+          
+      - name: SBOM for docker image
+        uses: anchore/sbom-action@v0
+        with:
+          image: iamridoydey/3-tier-app:${{ github.sha }}
+          format: spdx-json
+          output-file: image-sbom.spdx.json
+          upload-artifact: true
+          artifact-name: image-sbom  
         
       - name: Push images
         uses: docker/build-push-action@v7
