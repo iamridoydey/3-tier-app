@@ -19,7 +19,7 @@ COPY ./server ./
 
 # Create public dir
 RUN mkdir -p public
-COPY --from=client-builder ./app/client/public/ ./public
+COPY --from=client-builder /app/client/public/ ./public
 ENV NODE_ENV=production
 
 # Create a group in alpine and add a user to this group
