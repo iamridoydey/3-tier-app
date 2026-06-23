@@ -22,10 +22,9 @@ RUN mkdir -p public
 COPY --from=client-builder /app/client/public/ ./public
 ENV NODE_ENV=production
 
-# Create a group in alpine and add a user to this group
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
-# Provide the dir perimission to the user 
-RUN chown -R appuser:appgroup /app/
+# Create a group in alpine and add a user to this group and provide the dir perimission to the user 
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && chown -R appuser:appgroup /app/
 
 USER appuser
 
