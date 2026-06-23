@@ -13,7 +13,7 @@ RUN npm run build
 #=====================================================
 FROM node:lts-alpine3.24 AS server-runner
 WORKDIR /app/server
-COPY server/package*.json/ ./
+COPY server/package*.json ./
 RUN npm ci --omit=dev
 COPY ./server ./
 
