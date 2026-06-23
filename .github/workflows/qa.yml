@@ -364,6 +364,7 @@ jobs:
       - name: Build images
         uses: docker/build-push-action@v7
         with:
+          context: .
           push: false
           load: true
           tags: |
@@ -403,6 +404,7 @@ jobs:
       - name: Push images
         uses: docker/build-push-action@v7
         with:
+          context: .
           push: true
           tags: |
             iamridoydey/3-tier-app:${{ github.sha }}
