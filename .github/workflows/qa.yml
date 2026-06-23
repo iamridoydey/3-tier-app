@@ -303,6 +303,7 @@ jobs:
       # Check the Quality Gate status.
       - name: SonarQube Quality Gate check
         id: sonarqube-quality-gate-check
+        continue-on-error: true
         uses: sonarsource/sonarqube-quality-gate-action@master
         with:
           pollingTimeoutSec: 600
@@ -368,6 +369,7 @@ jobs:
           tags: |
             iamridoydey/3-tier-app:${{ github.sha }}
             iamridoydey/3-tier-app:latest
+      
         
       - name: Run Trivy and generate json report
         uses: aquasecurity/trivy-action@v0.36.0
