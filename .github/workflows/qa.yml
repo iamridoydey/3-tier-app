@@ -40,8 +40,8 @@ jobs:
         with:
           # This will add both a CLI output to the console and create a results.sarif file
           framework: ${{ matrix.framework }}
-          output_format: cli,sarif
-          output_file_path: console,checkov-${{ matrix.framework }}-result.sarif
+          output_format: 'cli,sarif'
+          output_file_path: 'console,checkov-${{ matrix.framework }}-result.sarif'
         continue-on-error: true
         
       - name: Upload SARIF file
