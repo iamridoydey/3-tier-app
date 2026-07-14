@@ -51,10 +51,13 @@ jobs:
           sarif_file: checkov-${{ matrix.framework }}-result.sarif
           category: checkov-${{ matrix.framework }}   # separates results per framework
       
-  trivy-client-fs:
-    name: Trivy client fs
+  trivy-fs-scan:
+    name: Trivy fs scan
     runs-on: ubuntu-latest
     needs: gitleaks-scan
+    strategy:
+      matrix: 
+        tier: [client, server]
     steps:
       - name: Git checkout
         uses: actions/checkout@v7
@@ -62,21 +65,21 @@ jobs:
       - name: Run trivy and generate json report
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: 'fs'
-          scan-ref: './client'
+          scan-type: fs
+          scan-ref: ./${{ matrix.tier }}
           ignore-unfixed: true
-          format: 'json'
-          output: 'trivy-client-fs-results.json'
+          format: sarif
+          output: trivy-${{ matrix.tier }}-fs-results.sarif
           severity: 'CRITICAL,HIGH'
   
       - name: Run trivy and generate table report
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: 'fs'
-          scan-ref: './client'
+          scan-type: fs
+          scan-ref: ./${{ matrix.tier }}
           ignore-unfixed: true
-          format: 'table'
-          output: 'trivy-client-fs-results.txt'
+          format: table
+          output: trivy-${{ matrix.tier }}-fs-results.txt
           severity: 'CRITICAL,HIGH'
   
       - name: Upload trivy fs reports
@@ -84,99 +87,43 @@ jobs:
         with:
           name: trivy-client-fs-reports
           path: |
-            trivy-client-fs-results.json
+            trivy-client-fs-results.sarif
             trivy-client-fs-results.txt
           if-no-files-found: warn
+        
+  linting:
+    name: Linting
+    runs-on: ubuntu-latest
+    needs:
+      - checkov-scan
+      - trivy-fs-scan
+    strategy:
+      matrix:
+        tier: [client, server]
+    defaults:
+      run:
+        working-directory: ${{ matrix.tier }}
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+      - name: Setup nodejs
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      - name: Install client dependancy
+        run: npm ci
+      - name: Run ${{ matrix.tier }} lint
+        run: npm run lint --if-present
+        continue-on-error: true
 
-  trivy-server-fs:
-    name: Trivy server fs
-    runs-on: ubuntu-latest
-    needs: gitleaks-scan
-    steps:
-      - name: Git checkout
-        uses: actions/checkout@v7
-  
-      - name: Run trivy and generate json report
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: 'fs'
-          scan-ref: './server'
-          ignore-unfixed: true
-          format: 'json'
-          output: 'trivy-server-fs-results.json'
-          severity: 'CRITICAL,HIGH'
-  
-      - name: Run trivy and generate table report
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          scan-type: 'fs'
-          scan-ref: './server'
-          ignore-unfixed: true
-          format: 'table'
-          output: 'trivy-server-fs-results.txt'
-          severity: 'CRITICAL,HIGH'
-  
-      - name: Upload trivy fs reports
-        uses: actions/upload-artifact@v7
-        with:
-          name: trivy-server-fs-reports
-          path: |
-            trivy-server-fs-results.json
-            trivy-server-fs-results.txt
-          if-no-files-found: warn
         
-  client-lint:
-    name: Client lint
-    runs-on: ubuntu-latest
-    needs:
-      - checkov-scan
-      - trivy-client-fs
-    defaults:
-      run:
-        working-directory: client
-    steps:
-      - name: Git checkout
-        uses: actions/checkout@v7
-      - name: Setup nodejs
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: 'npm'
-          cache-dependency-path: client/package-lock.json
-      - name: Install client dependancy
-        run: npm ci
-      - name: Run client lint
-        run: npm run lint --if-present
-        continue-on-error: true
-        
-  server-lint:
-    name: Server lint
-    runs-on: ubuntu-latest
-    needs:
-      - checkov-scan
-      - trivy-server-fs
-    defaults:
-      run:
-        working-directory: server
-    steps:
-      - name: Git checkout
-        uses: actions/checkout@v7
-      - name: Setup nodejs
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: 'npm'
-          cache-dependency-path: client/package-lock.json
-      - name: Install server dependancy
-        run: npm ci
-      - name: Run server lint
-        run: npm run lint --if-present
-        continue-on-error: true
   client-test:
-    name: Client test
+    name: Client testing
     runs-on: ubuntu-latest
     needs:
-      - client-lint
+      - linting
     defaults:
       run:
         working-directory: client
@@ -189,17 +136,17 @@ jobs:
           node-version: 24
           cache: 'npm'
           cache-dependency-path: client/package-lock.json
-      - name: Install client dependancy
+      - name: Install client dependency
         run: npm ci
       - name: Run client test
         run: npm run test --if-present
         continue-on-error: true
-        
+
   server-test:
-    name: Server test
+    name: Server testing
     runs-on: ubuntu-latest
     needs:
-      - server-lint
+      - linting
     defaults:
       run:
         working-directory: server
@@ -211,28 +158,30 @@ jobs:
         with:
           node-version: 24
           cache: 'npm'
-          cache-dependency-path: client/package-lock.json
-      - name: Install server dependancy
+          cache-dependency-path: server/package-lock.json
+      - name: Install server dependency
         run: npm ci
       - name: Run server test
         run: npm run test --if-present
         continue-on-error: true
+        
+  
 
   sonarqube:
     name: Sonarqube analysis and quality gate
     runs-on: ubuntu-latest
     needs: 
-      - server-test
       - client-test
+      - server-test
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Disabling shallow clone is recommended for improving relevancy of reporting.
           fetch-depth: 0
 
       # Triggering SonarQube analysis as results of it are required by Quality Gate check.
       - name: SonarQube scan
-        uses: sonarsource/sonarqube-scan-action@master
+        uses: sonarsource/sonarqube-scan-action@v8.2.0
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
@@ -241,7 +190,7 @@ jobs:
       - name: SonarQube quality gate check
         id: sonarqube-quality-gate-check
         continue-on-error: true
-        uses: sonarsource/sonarqube-quality-gate-action@master
+        uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
         with:
           pollingTimeoutSec: 600
         env:
@@ -312,21 +261,21 @@ jobs:
       - name: Run trivy and generate json report
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: 'image'
+          scan-type: image
           image-ref: iamridoydey/3-tier-app:${{ github.sha }}
           ignore-unfixed: true
-          format: 'json'
-          output: 'trivy-docker-image-results.json'
+          format: sarif
+          output: trivy-docker-image-results.sarif
           severity: 'CRITICAL,HIGH'
   
       - name: Run trivy and generate table report
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: 'image'
+          scan-type: image
           image-ref: iamridoydey/3-tier-app:${{ github.sha }}
           ignore-unfixed: true
-          format: 'table'
-          output: 'trivy-docker-image-results.txt'
+          format: table
+          output: trivy-docker-image-results.txt
           severity: 'CRITICAL,HIGH'
   
       - name: Upload trivy docker image reports
@@ -334,7 +283,7 @@ jobs:
         with:
           name: trivy-docker-image-reports
           path: |
-            trivy-docker-image-results.json
+            trivy-docker-image-results.sarif
             trivy-docker-image-results.txt
           if-no-files-found: warn
           
