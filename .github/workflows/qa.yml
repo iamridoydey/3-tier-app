@@ -24,78 +24,27 @@ jobs:
     name: Checkov-tf-scan
     runs-on: ubuntu-latest
     needs: gitleaks-scan
+    strategy:
+      matrix:
+        framework: [terraform, kubernetes, dockerfile]
     steps:
       - name: Git checkout
         uses: actions/checkout@v7
-      - name: Setup python
-        uses: actions/setup-python@v6
+      - name: Checkov ${{ matrix.framework }} scan
+        uses: bridgecrewio/checkov-action@v12
         with:
-          python-version: '3.13'
-      - name: Install checkov
-        run: pip install checkov
-      - name: Checkov tf scan
-        run: |
-          checkov -d . \
-          --framework terraform \
-          --output json > checkov-terraform-report.json || true
+          # This will add both a CLI output to the console and create a results.sarif file
+          framework: ${{ matrix.framework }}
+          output_format: cli,sarif
+          output_file_path: console,checkov-${{ matrix.framework }}-result.sarif
+        continue-on-error: true
+
         
-      - name: Upload checkov terraform artifact
-        uses: actions/upload-artifact@v7
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v2
         with:
-          name: checkov-terraform-scan-report
-          path: ${{ github.workspace }}/checkov-terraform-report.json
-          if-no-files-found: warn 
-          
-  checkov-k8s-scan:
-    name: Checkov-k8s-scan
-    runs-on: ubuntu-latest
-    needs: gitleaks-scan
-    steps:
-      - name: Git checkout
-        uses: actions/checkout@v7
-      - name: Setup python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-      - name: Install checkov
-        run: pip install checkov
-      - name: Checkov k8s scan
-        run: |
-          checkov -d . \
-          --framework kubernetes \
-          --output json > checkov-k8s-report.json || true
-        
-      - name: Upload checkov k8s artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: checkov-k8s-scan-report
-          path: ${{ github.workspace }}/checkov-k8s-report.json
-          if-no-files-found: warn
-  checkov-docker-scan:
-    name: Checkov-dockerfile-scan
-    runs-on: ubuntu-latest
-    needs: gitleaks-scan
-    steps:
-      - name: Git checkout
-        uses: actions/checkout@v7
-      - name: Setup python
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.13'
-      - name: Install checkov
-        run: pip install checkov
-      - name: Checkov dockerfile scan
-        run: |
-          checkov -d . \
-          --framework dockerfile \
-          --output json > checkov-dockerfile-report.json || true
-        
-      - name: Upload checkov dockerfile artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: checkov-dockerfile-scan-report
-          path: ${{ github.workspace }}/checkov-dockerfile-report.json
-          if-no-files-found: warn
+          sarif_file: checkov-${{ matrix.framework }}-result.sarif
+          category: checkov-${{ matrix.framework }}   # separates results per framework
       
   trivy-client-fs:
     name: Trivy client fs
