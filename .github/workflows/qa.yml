@@ -15,23 +15,10 @@ jobs:
     steps:
       - name: Git checkout
         uses: actions/checkout@v7
-      - name: Run gitleaks scan
-        run: |
-          docker run --rm \
-          -v "${{ github.workspace }}:/repo" \
-          zricethezav/gitleaks:latest detect \
-          --source=/repo \
-          --report-format=json \
-          --report-path=/repo/gitleaks-report.json \
-          --redact \
-          --exit-code 0
-          
-      - name: Upload gitleaks artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: gitleaks-report
-          path: ${{ github.workspace }}/gitleaks-report.json
-          if-no-files-found: warn 
+      - name: Gitleaks scanner and generate artifacts
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   checkov-tf-scan:
     name: Checkov-tf-scan
