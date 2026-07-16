@@ -86,12 +86,12 @@ app.delete('/api/users/:id', (req, res) => {
   });
 });
 
-// Serve static files — public is always a sibling of server.js,
-// regardless of whether we're running locally or inside the container.
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files from the client/public directory
+app.use(express.static(path.join(__dirname, '../client/public')));
 
+// Serve index.html for all other routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, '../client/public', 'index.html'));
 });
 
 // Start server
