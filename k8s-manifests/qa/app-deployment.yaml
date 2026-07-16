@@ -17,7 +17,7 @@ spec:
       - name: 3-tier-app-reg-secret
       containers:
       - name: 3-tier-app
-        image: iamridoydey/3-tier-app
+        image: iamridoydey/3-tier-app:xyz
         ports:
         - containerPort: 5000
         resources:
