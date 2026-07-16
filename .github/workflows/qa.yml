@@ -337,6 +337,8 @@ jobs:
     name: Deploy to k8s
     runs-on: ubuntu-latest
     needs: update-qa-manifests
+    permissions: 
+      id-token: write
     env:
       AWS_REGION: us-east-1
       AWS_CLUSTER_NAME: app-cluster
