@@ -359,8 +359,6 @@ jobs:
           
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
-        with:
-          version: 1.35
           
       - name: Generate the kubeconfig
         run: aws eks update-kubeconfig --name=${{ env.AWS_CLUSTER_NAME }} --region=${{ env.AWS_REGION }}
