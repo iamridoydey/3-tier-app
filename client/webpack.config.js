@@ -1,13 +1,14 @@
 const path = require('path');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
   mode: 'production',
   entry: './src/index.js',
   output: {
     filename: 'bundle.js',
-    path: path.resolve(__dirname, 'public'),
-    clean: true, // wipes old bundle.js/index.html from public/ before each build
+    // Output straight into server/public, so the same "public is a
+    // sibling of server.js" assumption holds true both locally and in Docker.
+    path: path.resolve(__dirname, '../server/public'),
+    clean: true, // wipes old bundle.js/index.html before each build
   },
   module: {
     rules: [
@@ -37,7 +38,7 @@ module.exports = {
     extensions: ['.js', '.css', '.png'],
   },
   plugins: [
-    new HtmlWebpackPlugin({
+    new (require('html-webpack-plugin'))({
       template: './src/index.html',
       filename: 'index.html',
     }),
