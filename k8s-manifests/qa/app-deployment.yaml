@@ -1,22 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: 3-tier-app
+  name: tier-app
   namespace: qa
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: 3-tier-app
+      app: tier-app
   template:
     metadata:
       labels:
-        app: 3-tier-app
+        app: tier-app
     spec:
       imagePullSecrets:
-      - name: 3-tier-app-reg-secret
+      - name: tier-app-reg-secret
       containers:
-      - name: 3-tier-app
+      - name: tier-app
         image: iamridoydey/3-tier-app:95211936201b5c677f281371b749a2582a5dfa48
         ports:
         - containerPort: 5000
