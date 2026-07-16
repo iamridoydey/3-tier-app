@@ -6,6 +6,8 @@ WORKDIR /app/client
 COPY client/package*.json ./
 RUN npm ci
 COPY ./client ./
+# webpack now writes directly to ../server/public,
+# i.e. /app/server/public inside this build stage
 RUN npm run build
 
 # ====================================================
@@ -17,15 +19,14 @@ COPY server/package*.json ./
 RUN npm ci --omit=dev
 COPY ./server ./
 
-# Create public dir
-RUN mkdir -p public
-COPY --from=client-builder /app/client/public/ ./public
+# Pull the already-built client assets straight from where
+# webpack put them in stage 1 — no path renaming needed.
+COPY --from=client-builder /app/server/public/ ./public
+
 ENV NODE_ENV=production
 
-# Create a group in alpine and add a user to this group and provide the dir perimission to the user 
 RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
     && chown -R appuser:appgroup /app/
-
 USER appuser
 
 EXPOSE 5000
