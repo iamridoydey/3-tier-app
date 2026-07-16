@@ -17,7 +17,7 @@ spec:
       - name: tier-app-reg-secret
       containers:
       - name: tier-app
-        image: iamridoydey/3-tier-app:5a8318acaabf22b8630892d86a394cdc2bf382c0
+        image: iamridoydey/3-tier-app:dbacf45cc3ca6461c67d51096afcd7984e26e6f3
         ports:
         - containerPort: 5000
         resources:
