@@ -1,11 +1,13 @@
 const path = require('path');
+const HtmlWebpackPlugin = require('html-webpack-plugin');
 
 module.exports = {
   mode: 'production',
   entry: './src/index.js',
   output: {
     filename: 'bundle.js',
-    path: path.resolve(__dirname, 'public'), // Ensure this path is correct
+    path: path.resolve(__dirname, 'public'),
+    clean: true, // wipes old bundle.js/index.html from public/ before each build
   },
   module: {
     rules: [
@@ -34,5 +36,10 @@ module.exports = {
   resolve: {
     extensions: ['.js', '.css', '.png'],
   },
+  plugins: [
+    new HtmlWebpackPlugin({
+      template: './src/index.html',
+      filename: 'index.html',
+    }),
+  ],
 };
-
