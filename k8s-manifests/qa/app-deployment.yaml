@@ -17,7 +17,7 @@ spec:
       - name: 3-tier-app-reg-secret
       containers:
       - name: 3-tier-app
-        image: iamridoydey/3-tier-app:{GITHUB_SHA}
+        image: iamridoydey/3-tier-app:ecec06a848b77110c837491cf95f731f92ba1977
         ports:
         - containerPort: 5000
         resources:
