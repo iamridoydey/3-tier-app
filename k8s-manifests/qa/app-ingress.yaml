@@ -19,6 +19,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: 3-tier-app-svc
+                name: tier-app-svc
                 port:
                   number: 5000
