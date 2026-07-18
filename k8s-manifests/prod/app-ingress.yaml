@@ -8,11 +8,11 @@ metadata:
     alb.ingress.kubernetes.io/target-type: ip
     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
     alb.ingress.kubernetes.io/ssl-redirect: '443'
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:402938031713:certificate/f449010f-f2bf-41a7-a991-729598d2fc94
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:402938031713:certificate/32473cc0-2bb7-4af5-b9f1-5f230ed66384
 spec:
   ingressClassName: alb
   rules:
-    - host: nextgenops.dev
+    - host: visitcounter.foo
       http:
         paths:
           - path: /
