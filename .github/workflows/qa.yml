@@ -1,0 +1,387 @@
+name: QA Pipeline
+on:
+  push:
+    branches: 
+      - qa
+    paths:
+      - client/**
+      - server/**
+      - .github/workflows/qa.yml
+      
+jobs:
+  gitleaks-scan:
+    name: Gitleaks scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+      - name: Gitleaks scanner and generate artifacts
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  checkov-scan:
+    name: Checkov-scan
+    runs-on: ubuntu-latest
+    needs: gitleaks-scan
+    permissions: 
+      contents: read # for actions/checkout to fetch code
+      security-events: write # for github/codeql-action/upload-sarif to upload SARIF results
+      actions: read # only required for a private repository by github/codeql-action/upload-sarif to get the Action run status
+
+    strategy:
+      matrix:
+        framework: [terraform, kubernetes, dockerfile]
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+      - name: Checkov ${{ matrix.framework }} scan
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          # This will add both a CLI output to the console and create a results.sarif file
+          framework: ${{ matrix.framework }}
+          output_format: 'cli,sarif'
+          output_file_path: 'console,checkov-${{ matrix.framework }}-result.sarif'
+        continue-on-error: true
+        
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v4
+        if: success() || failure()
+        with:
+          sarif_file: checkov-${{ matrix.framework }}-result.sarif
+          category: checkov-${{ matrix.framework }}   # separates results per framework
+      
+  trivy-fs-scan:
+    name: Trivy fs scan
+    runs-on: ubuntu-latest
+    needs: gitleaks-scan
+    strategy:
+      matrix: 
+        tier: [client, server]
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+  
+      - name: Run trivy and generate json report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ./${{ matrix.tier }}
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-${{ matrix.tier }}-fs-results.sarif
+          severity: 'CRITICAL,HIGH'
+  
+      - name: Run trivy and generate table report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: ./${{ matrix.tier }}
+          ignore-unfixed: true
+          format: table
+          output: trivy-${{ matrix.tier }}-fs-results.txt
+          severity: 'CRITICAL,HIGH'
+  
+      - name: Upload trivy fs reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-client-fs-reports
+          path: |
+            trivy-client-fs-results.sarif
+            trivy-client-fs-results.txt
+          if-no-files-found: warn
+        
+  linting:
+    name: Linting
+    runs-on: ubuntu-latest
+    needs:
+      - checkov-scan
+      - trivy-fs-scan
+    strategy:
+      matrix:
+        tier: [client, server]
+    defaults:
+      run:
+        working-directory: ${{ matrix.tier }}
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+      - name: Setup nodejs
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      - name: Install client dependancy
+        run: npm ci
+      - name: Run ${{ matrix.tier }} lint
+        run: npm run lint --if-present
+        continue-on-error: true
+
+        
+  client-test:
+    name: Client testing
+    runs-on: ubuntu-latest
+    needs:
+      - linting
+    defaults:
+      run:
+        working-directory: client
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+      - name: Setup nodejs
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      - name: Install client dependency
+        run: npm ci
+      - name: Run client test
+        run: npm run test --if-present
+        continue-on-error: true
+
+  server-test:
+    name: Server testing
+    runs-on: ubuntu-latest
+    needs:
+      - linting
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+      - name: Setup nodejs
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      - name: Install server dependency
+        run: npm ci
+      - name: Run server test
+        run: npm run test --if-present
+        continue-on-error: true
+        
+  
+
+  sonarqube:
+    name: Sonarqube analysis and quality gate
+    runs-on: ubuntu-latest
+    needs: 
+      - client-test
+      - server-test
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Disabling shallow clone is recommended for improving relevancy of reporting.
+          fetch-depth: 0
+
+      # Triggering SonarQube analysis as results of it are required by Quality Gate check.
+      - name: SonarQube scan
+        uses: sonarsource/sonarqube-scan-action@v8.2.0
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # Check the Quality Gate status.
+      - name: SonarQube quality gate check
+        id: sonarqube-quality-gate-check
+        continue-on-error: true
+        uses: sonarsource/sonarqube-quality-gate-action@v1.2.0
+        with:
+          pollingTimeoutSec: 600
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      # Optionally you can use the output from the Quality Gate in another step.
+      # The possible outputs of the `quality-gate-status` variable are `PASSED`, `WARN` or `FAILED`.
+      - name: "Example show SonarQube Quality Gate Status value"
+        run: echo "The Quality Gate status is ${{ steps.sonarqube-quality-gate-check.outputs.quality-gate-status }}"
+
+  # Might have the question after that we will build the image. Then why do we need to build here. Ans: Just make sure
+  # that no security and vulnerability left for docker build. (shift left security)
+  client-build:
+    name: Client webpack build
+    runs-on: ubuntu-latest
+    needs: client-test
+    defaults:
+        run:
+          working-directory: client
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+      - name: Setup nodejs
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      - name: Install client dependency
+        run: npm ci
+      - name: Build client
+        run: npm run build --if-present
+        continue-on-error: true
+
+  docker:
+    name: Docker build and push with trivy scan
+    runs-on: ubuntu-latest
+    needs: 
+      - client-build
+      - sonarqube
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+    
+      - name: Login to Docker Hub
+        uses: docker/login-action@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+        
+      - name: Build images
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: false
+          load: true
+          tags: |
+            iamridoydey/3-tier-app:${{ github.sha }}
+            iamridoydey/3-tier-app:latest
+      
+        
+      - name: Run trivy and generate json report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: iamridoydey/3-tier-app:${{ github.sha }}
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-docker-image-results.sarif
+          severity: 'CRITICAL,HIGH'
+  
+      - name: Run trivy and generate table report
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: image
+          image-ref: iamridoydey/3-tier-app:${{ github.sha }}
+          ignore-unfixed: true
+          format: table
+          output: trivy-docker-image-results.txt
+          severity: 'CRITICAL,HIGH'
+  
+      - name: Upload trivy docker image reports
+        uses: actions/upload-artifact@v7
+        with:
+          name: trivy-docker-image-reports
+          path: |
+            trivy-docker-image-results.sarif
+            trivy-docker-image-results.txt
+          if-no-files-found: warn
+          
+      - name: SBOM for docker image
+        uses: anchore/sbom-action@v0
+        with:
+          image: iamridoydey/3-tier-app:${{ github.sha }}
+          format: spdx-json
+          output-file: image-sbom.spdx.json
+          upload-artifact: true
+          artifact-name: image-sbom  
+        
+      - name: Push images
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: |
+            iamridoydey/3-tier-app:${{ github.sha }}
+            iamridoydey/3-tier-app:latest
+
+  update-qa-manifests:
+    name: Update qa manifests
+    runs-on: ubuntu-latest
+    needs: docker
+    permissions:
+      contents: write
+
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+        with:
+          ref: qa
+
+      - name: Update image tag in manifest
+        run: |
+          sed -i "s|image: iamridoydey/3-tier-app:.*|image: iamridoydey/3-tier-app:${GITHUB_SHA}|g" k8s-manifests/qa/app-deployment.yaml
+      - name: Show updated manifest
+        run: |
+          cat k8s-manifests/qa/app-deployment.yaml
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add k8s-manifests/qa/app-deployment.yaml
+          git commit -m "Update QA image to ${GITHUB_SHA} [skip ci]" || echo "No changes to commit"
+          git push origin qa
+
+  deploy-to-k8s:
+    name: Deploy to k8s
+    runs-on: ubuntu-latest
+    needs: update-qa-manifests
+    permissions: 
+      id-token: write
+    env:
+      AWS_REGION: us-east-1
+      AWS_CLUSTER_NAME: app-cluster
+      k8s_NAMESPACE: qa
+      
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: qa
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v6.1.0
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+          
+      - name: Generate the kubeconfig
+        run: aws eks update-kubeconfig --name=${{ env.AWS_CLUSTER_NAME }} --region=${{ env.AWS_REGION }}
+
+      - name: Verify the identity
+        run: |
+          aws sts get-caller-identity
+          kubectl config current-context
+
+      - name: Verify the namespace access
+        run: |
+          kubectl get pods -n ${{ env.k8s_NAMESPACE }}
+          kubectl get services -n ${{ env.k8s_NAMESPACE }}
+          kubectl auth can-i create deploy -n ${{ env.k8s_NAMESPACE }}
+          kubectl auth can-i create svc -n ${{ env.k8s_NAMESPACE }}
+          kubectl auth can-i create ingress -n ${{ env.k8s_NAMESPACE }}
+
+      - name: Deploy app manifests to the k8s cluster
+        run: |
+          kubectl apply -f k8s-manifests/qa/ -n ${{ env.k8s_NAMESPACE }}
+      - name: Verify rollout
+        run: |
+          kubectl rollout status deployment/tier-app -n ${{ env.k8s_NAMESPACE }} --timeout=180s
+
+        
+        
